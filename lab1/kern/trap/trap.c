@@ -46,6 +46,14 @@ idt_init(void) {
       *     You don't know the meaning of this instruction? just google it! and check the libs/x86.h to know more.
       *     Notice: the argument of lidt is idt_pd. try to find it!
       */
+      extern uintptr_t __vectors[];
+      int i;
+      for(i=0;i<256;i++){
+        SETGATE(idt[i],0,GD_KTEXT,__vectors[i],DPL_KERNEL);
+      }
+      SETGATE(idt[T_SYSCALL], 0, GD_KTEXT, __vectors[T_SYSCALL], DPL_USER);
+      SETGATE(idt[T_SWITCH_TOK], 1, GD_KTEXT, __vectors[T_SWITCH_TOK], DPL_USER);
+     lidt(&idt_pd);
 }
 
 static const char *
@@ -134,6 +142,27 @@ print_regs(struct pushregs *regs) {
     cprintf("  eax  0x%08x\n", regs->reg_eax);
 }
 
+static void
+lab1_switch_to_user(void) {
+    //LAB1 CHALLENGE 1 : TODO
+    asm volatile (
+	    "sub $0x8, %%esp \n"
+	    "movl %%ebp, %%esp"
+	    : 
+	    : "i"(T_SWITCH_TOU)
+	);
+}
+
+static void
+lab1_switch_to_kernel(void) {
+    //LAB1 CHALLENGE 1 :  TODO
+    	asm volatile (
+	    "movl %%ebp, %%esp \n"
+	    : 
+	    : "i"(T_SWITCH_TOK)
+	);
+}
+
 /* trap_dispatch - dispatch based on what type of trap occurred */
 static void
 trap_dispatch(struct trapframe *tf) {
@@ -147,6 +176,11 @@ trap_dispatch(struct trapframe *tf) {
          * (2) Every TICK_NUM cycle, you can print some info using a funciton, such as print_ticks().
          * (3) Too Simple? Yes, I think so!
          */
+        ticks++;
+         if(ticks==TICK_NUM){
+            print_ticks();
+            ticks=0;
+         }
         break;
     case IRQ_OFFSET + IRQ_COM1:
         c = cons_getc();
@@ -154,12 +188,27 @@ trap_dispatch(struct trapframe *tf) {
         break;
     case IRQ_OFFSET + IRQ_KBD:
         c = cons_getc();
-        cprintf("kbd [%03d] %c\n", c, c);
+        if(c=='3'){
+	    cprintf("KtoU\n");
+	    lab1_switch_to_user();
+	    print_trapframe(tf);	
+	}
+	else if(c=='0'){
+	    cprintf("UtoK\n");
+	    lab1_switch_to_kernel();
+	    print_trapframe(tf);
+	}
         break;
     //LAB1 CHALLENGE 1 : YOUR CODE you should modify below codes.
     case T_SWITCH_TOU:
+        tf->tf_cs = USER_CS;
+        tf->tf_ds = tf->tf_es= tf->tf_ss = USER_DS;
+        tf->tf_eflags |= FL_IOPL_MASK; 
+        break;
     case T_SWITCH_TOK:
-        panic("T_SWITCH_** ??\n");
+        tf->tf_cs = KERNEL_CS;
+        tf->tf_ds = tf->tf_es = tf->tf_ss = KERNEL_DS;
+        tf->tf_eflags &= ~FL_IOPL_MASK;
         break;
     case IRQ_OFFSET + IRQ_IDE1:
     case IRQ_OFFSET + IRQ_IDE2:
