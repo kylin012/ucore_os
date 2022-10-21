@@ -263,6 +263,7 @@ MAKEOPTS		:= --quiet --no-print-directory
 
 grade:
 	$(V)$(MAKE) $(MAKEOPTS) clean
+	chmod u+x tools/*.sh
 	$(V)$(SH) tools/grade.sh
 
 touch:

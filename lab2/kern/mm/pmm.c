@@ -371,15 +371,16 @@ get_pte(pde_t *pgdir, uintptr_t la, bool create) {
 #if 1
     pde_t *pdep = pgdir + 4 * PDX(la);   // (1) find page directory entry
     if ((*pdep)&PTE_P==0) {              // (2) check if entry is not present
+        struct Page* newPage;
         if(create){                      // (3) check if creating is needed, then alloc page for page table
-            Page* newPage = alloc_page();// CAUTION: this page is used for page table, not for common data page
+            newPage = alloc_page();// CAUTION: this page is used for page table, not for common data page
             if(!newPage){   //physical memory allocation failed
                 panic("alloc_page failed.\n");
                 return NULL;
             }
         }                 
         set_page_ref(newPage,1);         // (4) set page reference
-        uintptr_t pa = page2pa(page); 
+        uintptr_t pa = page2pa(newPage); 
         uintptr_t la = KADDR(pa);        // (5) get linear address of page
         memset(la, 0, 4*1024);           // (6) clear page content using memset
         *pdep = pa | PTE_USER;           // (7) set page directory entry's permission (PTE_U | PTE_W | PTE_P)
@@ -422,13 +423,15 @@ page_remove_pte(pde_t *pgdir, uintptr_t la, pte_t *ptep) {
      * DEFINEs:
      *   PTE_P           0x001                   // page table/directory entry flags bit : Present
      */
-#if 0
-    if (0) {                      //(1) check if this page table entry is present
-        struct Page *page = NULL; //(2) find corresponding page to pte
-                                  //(3) decrease page reference
-                                  //(4) and free this page when page reference reachs 0
-                                  //(5) clear second page table entry
-                                  //(6) flush tlb
+#if 1
+    if (ptep != NULL && *ptep & PTE_P) {                    //(1) check if this page table entry is present
+        struct Page *page = pte2page(*ptep);                //(2) find corresponding page to pte
+        page_ref_dec(page);                                 //(3) decrease page reference
+        if(page->ref == 0){                                 //(4) and free this page when page reference reachs 0
+            free_page(page);
+        }
+        *ptep = 0;
+        tlb_invalidate(pgdir, la);         //(6) flush tlb
     }
 #endif
 }
