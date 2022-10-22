@@ -368,25 +368,30 @@ get_pte(pde_t *pgdir, uintptr_t la, bool create) {
      *   PTE_W           0x002                   // page table/directory entry flags bit : Writeable
      *   PTE_U           0x004                   // page table/directory entry flags bit : User can access
      */
-#if 1
-    pde_t *pdep = pgdir + 4 * PDX(la);   // (1) find page directory entry
-    if ((*pdep)&PTE_P==0) {              // (2) check if entry is not present
-        struct Page* newPage;
-        if(create){                      // (3) check if creating is needed, then alloc page for page table
-            newPage = alloc_page();// CAUTION: this page is used for page table, not for common data page
-            if(!newPage){   //physical memory allocation failed
-                panic("alloc_page failed.\n");
-                return NULL;
-            }
-        }                 
-        set_page_ref(newPage,1);         // (4) set page reference
-        uintptr_t pa = page2pa(newPage); 
-        uintptr_t la = KADDR(pa);        // (5) get linear address of page
-        memset(la, 0, 4*1024);           // (6) clear page content using memset
-        *pdep = pa | PTE_USER;           // (7) set page directory entry's permission (PTE_U | PTE_W | PTE_P)
+#if 0
+    pde_t *pdep = NULL;   // (1) find page directory entry
+    if (0) {              // (2) check if entry is not present
+                          // (3) check if creating is needed, then alloc page for page table
+                          // CAUTION: this page is used for page table, not for common data page
+                          // (4) set page reference
+        uintptr_t pa = 0; // (5) get linear address of page
+                          // (6) clear page content using memset
+                          // (7) set page directory entry's permission
     }
-    return KADDR(PTE_ADDR(*pdep)) + PTX(la);// (8) return page table entry, PTE_ADDR() removes flags and generates the physical address
+    return NULL;          // (8) return page table entry
 #endif
+    pde_t *pdep = &pgdir[PDX(la)];
+    if (!(*pdep & PTE_P)) {
+        struct Page *page;
+        if (!create || (page = alloc_page()) == NULL) {
+            return NULL;
+        }
+        set_page_ref(page, 1);
+        uintptr_t pa = page2pa(page);
+        memset(KADDR(pa), 0, PGSIZE);
+        *pdep = pa | PTE_U | PTE_W | PTE_P;
+    }
+    return &((pte_t *)KADDR(PDE_ADDR(*pdep)))[PTX(la)];
 }
 
 //get_page - get related Page struct for linear address la using PDT pgdir
