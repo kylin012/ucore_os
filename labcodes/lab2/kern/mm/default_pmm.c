@@ -79,7 +79,6 @@ default_init_memmap(struct Page *base, size_t n) {
     }
     base->property = n; //从base开始的连续n个空闲块
     nr_free += n;	//总空闲块个数+n
-    
 }
 
 static struct Page *
