@@ -3,8 +3,8 @@
 #include <string.h>
 #include <buddy_pmm.h>
 
-#define LEFT_LEAF(index) ((index)*2 + 1)
-#define RIGHT_LEAF(index) ((index)*2 + 2)
+#define LEFT_LEAF(index) ((index)*2)
+#define RIGHT_LEAF(index) ((index)*2 + 1)
 #define PARENT(index) (((index) + 1) / 2 - 1)
 
 #define IS_POWER_OF_2(x) (!((x) & ((x)-1)))
@@ -60,7 +60,7 @@ buddy_init_memmap(struct Page *base, size_t n){
             node_size /= 2;
         }
     }
-    base->property = n;
+    base->property = free_pages;
     SetPageProperty(base);
     cprintf("===================buddy init end===================\n");
     cprintf("free_size = %d\n", free_pages);
