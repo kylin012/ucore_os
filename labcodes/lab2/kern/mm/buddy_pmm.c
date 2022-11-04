@@ -5,7 +5,7 @@
 
 #define LEFT_LEAF(index) ((index)*2)
 #define RIGHT_LEAF(index) ((index)*2 + 1)
-#define PARENT(index) (((index) + 1) / 2 - 1)
+#define PARENT(index) (index / 2)
 
 #define IS_POWER_OF_2(x) (!((x) & ((x)-1)))
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
@@ -70,9 +70,56 @@ buddy_init_memmap(struct Page *base, size_t n){
     cprintf("====================================================\n");
 }
 
+int 
+buddy_alloc(int size){
+    unsigned index = 1;
+    unsigned offset = 0;
+    unsigned node_size;
+    // 将size向上取整为2的幂
+    if(size <= 0)
+        size = 1;
+    else if(!IS_POWER_OF_2(size))
+        size = 1 << ROUND_UP_LOG(size);
+    if(buddy_manager[index] < size)
+        return -1;
+    // 从根节点往下深度遍历，找到恰好等于size的块
+    for(node_size = buddy_manager[index];node_size != size;node_size /= 2){
+        if(buddy_manager[LEFT_LEAF(index)] >= size)
+            index = LEFT_LEAF(index);
+        else
+            index = RIGHT_LEAF(index);
+    }
+    // 将找到的块取出分配
+    buddy[index] = 0;
+    // 计算块在所有块内存中的索引
+    offset = (index + 1) * node_size - manager_size / 2;
+    // 向上回溯至根节点，修改沿途节点的大小
+    while(index > 1){
+        index = PARENT(index);
+        buddy_manager[index] = MAX(buddy_manager[LEFT_LEAF(index)],buddy_manager[RIGHT_LEAF(index)]);
+    }
+    return offset;
+}
+
 static struct Page*
 buddy_alloc_pages(size_t n) {
-
+    assert(n>0);
+    if(n > free_pages)
+        return NULL;
+    // 获取分配的页在内存中的起始地址
+    int offset = buddy_alloc(n);
+    struct Page *base = page_base + offset;
+    struct Page *page;
+    // 将n向上取整，因为有round_n个块被取出
+    round_n = 1 << ROUND_UP_LOG(n);
+    // 将每一个取出的块由空闲态改为保留态
+    for(page = base;page != base + round_n;page++){
+        ClearPageProperty(page);
+        SetPageReserved(page);
+    }
+    free_pages -= round_n;
+    base->property = n;
+    return base;
 }
 
 static void
