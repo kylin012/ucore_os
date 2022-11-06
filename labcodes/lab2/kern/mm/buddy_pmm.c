@@ -24,11 +24,11 @@ unsigned* buddy_manager;
 
 struct Page* page_base;
 
-int free_pages, manager_size;
+int free_page_num, manager_size;
 
 static void
 buddy_init(void) {
-    free_pages = 0;
+    free_page_num = 0;
 }
 
 static void
@@ -50,7 +50,7 @@ buddy_init_memmap(struct Page *base, size_t n){
     // page_base 用来在后续申请和释放内存的时候提供可用内存空间的起始地址
     page_base = base;
     // 剩余可用页数
-    free_pages = n - 4 * manager_size / 4096;
+    free_page_num = n - 4 * manager_size / 4096;
     // buddy数组的下标[1 … manager_size]有效
     int i = 1;
     int node_size = manager_size / 2;
@@ -60,10 +60,10 @@ buddy_init_memmap(struct Page *base, size_t n){
             node_size /= 2;
         }
     }
-    base->property = free_pages;
+    base->property = free_page_num;
     SetPageProperty(base);
     cprintf("===================buddy init end===================\n");
-    cprintf("free_size = %d\n", free_pages);
+    cprintf("free_size = %d\n", free_page_num);
     cprintf("buddy_size = %d\n", manager_size);
     cprintf("buddy_addr = 0x%08x\n", buddy_manager);
     cprintf("manager_page_base = 0x%08x\n", page_base);
@@ -90,7 +90,7 @@ buddy_alloc(int size){
             index = RIGHT_LEAF(index);
     }
     // 将找到的块取出分配
-    buddy[index] = 0;
+    buddy_manager[index] = 0;
     // 计算块在所有块内存中的索引
     offset = (index + 1) * node_size - manager_size / 2;
     // 向上回溯至根节点，修改沿途节点的大小
@@ -104,19 +104,19 @@ buddy_alloc(int size){
 static struct Page*
 buddy_alloc_pages(size_t n) {
     assert(n>0);
-    if(n > free_pages)
+    if(n > free_page_num)
         return NULL;
     // 获取分配的页在内存中的起始地址
     int offset = buddy_alloc(n);
     struct Page *base = page_base + offset;
     struct Page *page;
     // 将n向上取整，因为有round_n个块被取出
-    round_n = 1 << ROUND_UP_LOG(n);
+    int round_n = 1 << ROUND_UP_LOG(n);
     // 将每一个取出的块由空闲态改为保留态
     for(page = base;page != base + round_n;page++){
         ClearPageProperty(page);
     }
-    free_pages -= round_n;
+    free_page_num -= round_n;
     base->property = n;
     return base;
 }
@@ -143,7 +143,7 @@ buddy_free_pages(struct Page* base, size_t n) {
     }
     buddy_manager[index] = node_size;
     //STEP3: 回溯直到根节点，更改沿途值
-    index = PARENT[index];
+    index = PARENT(index);
     while(index){
         unsigned leftSize = buddy_manager[LEFT_LEAF(index)];
         unsigned rightSize = buddy_manager[RIGHT_LEAF(index)];
@@ -158,12 +158,12 @@ buddy_free_pages(struct Page* base, size_t n) {
         }
     }
     //STEP4: 增加空闲页数，结束释放过程
-    free_pages += n;
+    free_page_num += n;
 }
 
 static size_t
 buddy_nr_free_pages(void) {
-    return free_pages;
+    return free_page_num;
 }
 
 static void
