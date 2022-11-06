@@ -28,7 +28,7 @@ int free_pages, manager_size;
 
 static void
 buddy_init(void) {
-    
+    free_pages = 0;
 }
 
 static void
@@ -115,7 +115,6 @@ buddy_alloc_pages(size_t n) {
     // 将每一个取出的块由空闲态改为保留态
     for(page = base;page != base + round_n;page++){
         ClearPageProperty(page);
-        SetPageReserved(page);
     }
     free_pages -= round_n;
     base->property = n;
@@ -124,12 +123,47 @@ buddy_alloc_pages(size_t n) {
 
 static void
 buddy_free_pages(struct Page* base, size_t n) {
-
+    //STEP1: 重置pages中对应的page
+    assert(n > 0);
+    assert(PageReserved(base));	//保证base原先处于保留态
+    for(struct Page* p = base; p < base + n; p++){
+        assert(!PageReserved(p) && !PageProperty(p));//确认该帧已经被分配，且不是保留帧
+        //在此作者（ZJK）认为：由于不需要property，将所有page的property flag置为0即可
+        set_page_ref(p, 0);
+    }
+    //STEP2: 将buddy中的对应节点释放
+    //自底向上寻找
+    unsigned offset = base - page_base;//开始块序号
+    unsigned index = manager_size / 2 + offset;//对应叶节点
+    unsigned node_size = 1;
+    while(buddy_manager[index]){//找第一个值为0的节点
+        index = PARENT(index);//上溯
+        node_size *= 2;
+        assert(index);//直到根节点都不为0，说明有误，中断
+    }
+    buddy_manager[index] = node_size;
+    //STEP3: 回溯直到根节点，更改沿途值
+    index = PARENT[index];
+    while(index){
+        unsigned leftSize = buddy_manager[LEFT_LEAF(index)];
+        unsigned rightSize = buddy_manager[RIGHT_LEAF(index)];
+        if(leftSize + rightSize == node_size){//左右节点均全空，连起来
+            buddy_manager[index] = node_size;
+        }
+        else if(leftSize>rightSize){
+            node_size = leftSize;
+        }
+        else{
+            node_size = rightSize;
+        }
+    }
+    //STEP4: 增加空闲页数，结束释放过程
+    free_pages += n;
 }
 
 static size_t
 buddy_nr_free_pages(void) {
-
+    return free_pages;
 }
 
 static void
