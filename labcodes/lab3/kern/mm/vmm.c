@@ -306,14 +306,16 @@ do_pgfault(struct mm_struct *mm, uint32_t error_code, uintptr_t addr) {
     int ret = -E_INVAL;
     //try to find a vma which include addr
     struct vma_struct *vma = find_vma(mm, addr);
-
+    //缺页异常发生数自增1
     pgfault_num++;
     //If the addr is in the range of a mm's vma?
+    //若addr不在vma的范围内，说明是非法地址，直接报错
     if (vma == NULL || vma->vm_start > addr) {
         cprintf("not valid addr %x, and  can not find it in vma\n", addr);
         goto failed;
     }
     //check the error_code
+    // 检查vma的权限是否与error code的权限对应
     switch (error_code & 3) {
     default:
             /* error code flag : default is 3 ( W/R=1, P=1): write, present */
@@ -338,15 +340,15 @@ do_pgfault(struct mm_struct *mm, uint32_t error_code, uintptr_t addr) {
      * THEN
      *    continue process
      */
-    uint32_t perm = PTE_U;
+    uint32_t perm = PTE_U;  //在PTE中保存的权限，表示用户态
     if (vma->vm_flags & VM_WRITE) {
         perm |= PTE_W;
     }
-    addr = ROUNDDOWN(addr, PGSIZE);
+    addr = ROUNDDOWN(addr, PGSIZE);   //地址按页对齐
 
     ret = -E_NO_MEM;
 
-    pte_t *ptep=NULL;
+    pte_t *ptep=NULL;   // 虚拟地址对应的PTE
     /*LAB3 EXERCISE 1: YOUR CODE
     * Maybe you want help comment, BELOW comments can help you finish the code
     *
@@ -396,7 +398,36 @@ do_pgfault(struct mm_struct *mm, uint32_t error_code, uintptr_t addr) {
         }
    }
 #endif
-   ret = 0;
+    ptep = get_pte(mm->pgdir,addr,1); //获得虚拟地址对应的PTE，如果包含该PTE的PT不存在，建立一个页存储PTE
+    // *ptep为0说明需要建立物理页
+    if (*ptep == 0){
+        //分配物理页失败
+        if (pgdir_alloc_page(mm->pgdir, addr, perm) == NULL) {  
+            cprintf("alloc page in do_pgfault failed\n");
+            goto failed;
+        }
+    }
+    // 不为0，可以认为页在磁盘中，需要交换到内存中
+    else {
+        // 如果开启了交换功能，则在内存中新建物理页，将页由磁盘换到内存中
+        if(swap_init_ok) {
+            struct Page *page = NULL;
+            // 交换失败
+            if(swap_in(mm,addr,&page)){
+                cprintf("swap page in do_pgfault failed\n");
+                goto failed;
+            }
+            // 交换成功，则建立物理地址<--->虚拟地址映射，并将页设置为可交换的
+            page_insert(mm->pgdir,page,addr,perm);
+            swap_map_swappable(mm,addr,page,1);
+        }
+        // 没开启交换功能
+        else{
+            cprintf("no swap_init_ok but ptep is %x, failed\n",*ptep);
+            goto failed;
+        }
+    }
+    ret = 0;
 failed:
     return ret;
 }
