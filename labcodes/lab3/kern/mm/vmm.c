@@ -241,6 +241,7 @@ check_pgfault(void) {
     size_t nr_free_pages_store = nr_free_pages();
 
     check_mm_struct = mm_create();
+    cprintf("%d %d\n", nr_free_pages_store, nr_free_pages());
     assert(check_mm_struct != NULL);
 
     struct mm_struct *mm = check_mm_struct;
@@ -248,6 +249,7 @@ check_pgfault(void) {
     assert(pgdir[0] == 0);
 
     struct vma_struct *vma = vma_create(0, PTSIZE, VM_WRITE);
+    cprintf("%d %d\n", nr_free_pages_store, nr_free_pages());
     assert(vma != NULL);
 
     insert_vma_struct(mm, vma);
@@ -267,12 +269,14 @@ check_pgfault(void) {
 
     page_remove(pgdir, ROUNDDOWN(addr, PGSIZE));
     free_page(pa2page(pgdir[0]));
+    cprintf("%d %d\n", nr_free_pages_store, nr_free_pages());
     pgdir[0] = 0;
 
     mm->pgdir = NULL;
     mm_destroy(mm);
+    cprintf("%d %d\n", nr_free_pages_store, nr_free_pages());
     check_mm_struct = NULL;
-
+    cprintf("%d %d\n", nr_free_pages_store, nr_free_pages());
     assert(nr_free_pages_store == nr_free_pages());
 
     cprintf("check_pgfault() succeeded!\n");
@@ -406,6 +410,7 @@ do_pgfault(struct mm_struct *mm, uint32_t error_code, uintptr_t addr) {
             cprintf("alloc page in do_pgfault failed\n");
             goto failed;
         }
+        else cprintf("alloc succeeded");
     }
     // 不为0，可以认为页在磁盘中，需要交换到内存中
     else {
