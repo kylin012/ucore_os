@@ -74,11 +74,13 @@ default_init_memmap(struct Page *base, size_t n) {
         assert(PageReserved(p));
         p->flags = p->property = 0;
         set_page_ref(p, 0);
-	SetPageProperty(p);	//置为空闲态
-	list_add_before(&free_list, &(p->page_link)); //原来的每次在头节点之后插入，由于base递增，会导致各个连续空闲块首地址递减，所以改成在头节点之前插入
+	//SetPageProperty(p);	//置为空闲态
+	//list_add_before(&free_list, &(p->page_link)); //原来的每次在头节点之后插入，由于base递增，会导致各个连续空闲块首地址递减，所以改成在头节点之前插入
     }
+    SetPageProperty(base);
     base->property = n; //从base开始的连续n个空闲块
     nr_free += n;	//总空闲块个数+n
+    list_add(&free_list, &(base->page_link));
 }
 
 static struct Page *
@@ -97,20 +99,29 @@ default_alloc_pages(size_t n) {
         }
     }
     if (page != NULL) {	//找到了
-    list_entry_t *le2;
-	int i;
-        for(i=0;i<n;i++){ //每次将一个空闲块由空闲态置为保留态，并从链表中删除
-		le2=list_next(le);
-		struct Page *p = le2page(le,page_link);
-		SetPageReserved(p);
-		ClearPageProperty(p);
-		list_del(le);
-		le=le2;	
-	}
-	struct Page *p = le2page(le,page_link);
-	if(page->property>n)	//如果原连续空闲块还有剩余，需要重新设置property
-		p->property=page->property-n;
-	nr_free-=n;
+    //list_entry_t *le2;
+	// int i;
+    //     for(i=0;i<n;i++){ //每次将一个空闲块由空闲态置为保留态，并从链表中删除
+	// 	le2=list_next(le);
+	// 	struct Page *p = le2page(le,page_link);
+	// 	SetPageReserved(p);
+	// 	ClearPageProperty(p);
+	// 	list_del(le);
+	// 	le=le2;	
+	// }
+        if (page->property > n) {
+            struct Page *p = page + n;
+            SetPageProperty(p);
+            p->property = page->property - n;
+            list_add(&(page->page_link), &(p->page_link));//改为在分配块后加入
+        }
+        list_del(&(page->page_link));
+	// struct Page *p = le2page(le,page_link);
+	// if(page->property>n)	//如果原连续空闲块还有剩余，需要重新设置property
+	// 	p->property=page->property-n;
+	    nr_free-=n;
+        page->property = 0;
+        ClearPageProperty(page);
     }
     return page;
 }
@@ -118,8 +129,12 @@ default_alloc_pages(size_t n) {
 static void
 default_free_pages(struct Page *base, size_t n) {
     assert(n > 0);
-    assert(PageReserved(base));	//保证base原先处于保留态
-    struct Page *p;
+    //assert(PageReserved(base));	//保证base原先处于保留态
+    struct Page *p = base;
+    for (; p != base + n; p ++) {
+        assert(!PageReserved(p) && !PageProperty(p));
+        set_page_ref(p, 0);
+    }
     list_entry_t *le = &free_list;
     while ((le =list_next(le))!= &free_list) {
         p = le2page(le, page_link);
@@ -127,31 +142,51 @@ default_free_pages(struct Page *base, size_t n) {
 	   break;  //如果没触发break就说明在最后
 	}
     }
+    SetPageProperty(base);
     base->property=n;
     nr_free += n;
-    set_page_ref(base,0);
+    list_add_before(le, &(base->page_link));
+    if(le==&free_list){//如果没啥别的事，赶紧让他滚蛋
+        return;
+    }
+    //set_page_ref(base,0);
     if(base+n==p){ //如果p刚好在base的后面，要将p合并到base代表的连续块中
+        cprintf("here");
        base->property+=p->property;
        p->property=0;
+       ClearPageProperty(p);
+       list_del(&(p->page_link));
     }
-    for(p=base;p<base+n;p++){ //将base插入链表，且由保留态置为空闲态
-       list_add_before(le,&p->page_link);
-       ClearPageReserved(p);
-       SetPageProperty(p);
-    } 
+    // for(p=base;p<base+n;p++){ //将base插入链表，且由保留态置为空闲态
+    //    list_add_before(le,&p->page_link);
+    //    ClearPageReserved(p);
+    //    SetPageProperty(p);
+    // } 
     le = list_prev(&(base->page_link));
     p = le2page(le, page_link);
-    if(p==base-1&&le!=&free_list){ //如果p刚好在base前面，要将base合并到p代表的连续块中
-      while(le!=&free_list){ //向前找到p连续块的第一块
-        if(p->property){
-          p->property += base->property;
-          base->property = 0;
-          break;
-        }
-	le=list_prev(le);
-	p = le2page(le,page_link);
-      }
+    // if(p==base-1&&le!=&free_list){ //如果p刚好在base前面，要将base合并到p代表的连续块中
+    //   while(le!=&free_list){ //向前找到p连续块的第一块
+    //     if(p->property){
+    //       p->property += base->property;
+    //       base->property = 0;
+    //       break;
+    //     }
+	// le=list_prev(le);
+	// p = le2page(le,page_link);
+    //   }
+    // }
+    if(p + p->property == base){
+        p->property += base->property;
+        ClearPageProperty(base);
+        list_del(&(base->page_link));
+        base = p;
     }
+            le = &free_list;
+    //debug专用
+    //while ((le = list_next(le)) != &free_list) { //找第一个大小大于n的连续空闲块
+    //     struct Page *p = le2page(le, page_link);
+    //     cprintf("@%x, %d\n", p, p->property);
+    // }
     return;
 }
 
@@ -167,7 +202,6 @@ basic_check(void) {
     assert((p0 = alloc_page()) != NULL);
     assert((p1 = alloc_page()) != NULL);
     assert((p2 = alloc_page()) != NULL);
-
     assert(p0 != p1 && p0 != p2 && p1 != p2);
     assert(page_ref(p0) == 0 && page_ref(p1) == 0 && page_ref(p2) == 0);
 
@@ -225,7 +259,6 @@ default_check(void) {
     assert(total == nr_free_pages());
 
     basic_check();
-
     struct Page *p0 = alloc_pages(5), *p1, *p2;
     assert(p0 != NULL);
     assert(!PageProperty(p0));
