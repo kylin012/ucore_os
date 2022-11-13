@@ -137,8 +137,8 @@ gdt_init(void) {
 //init_pmm_manager - initialize a pmm_manager instance
 static void
 init_pmm_manager(void) {
-    // pmm_manager = &default_pmm_manager;
-    pmm_manager = &buddy_pmm_manager;
+    pmm_manager = &default_pmm_manager;
+    // pmm_manager = &buddy_pmm_manager;
     cprintf("memory management: %s\n", pmm_manager->name);
     pmm_manager->init();
 }
@@ -190,36 +190,51 @@ nr_free_pages(void) {
 /* pmm_init - initialize the physical memory management */
 static void
 page_init(void) {
+    // 取到e820map结构体数组的地址
+    // 之所以加上KERNBASE是因为指针寻址时使用的是线性虚拟地址。按照最终的虚实地址关系(0x8000 + KERNBASE)虚拟地址 = 0x8000 物理地址
     struct e820map *memmap = (struct e820map *)(0x8000 + KERNBASE);
     uint64_t maxpa = 0;
 
     cprintf("e820map:\n");
     int i;
+    // 依次遍历e820map中的内存段
     for (i = 0; i < memmap->nr_map; i ++) {
         uint64_t begin = memmap->map[i].addr, end = begin + memmap->map[i].size;
         cprintf("  memory: %08llx, [%08llx, %08llx], type = %d.\n",
                 memmap->map[i].size, begin, end - 1, memmap->map[i].type);
+        // 如果这个内存段的类型是E820_ARM，说明其是一个有效可用的内存段
         if (memmap->map[i].type == E820_ARM) {
+            // 延申可用的最大物理内存地址
             if (maxpa < end && begin < KMEMSIZE) {
                 maxpa = end;
             }
         }
     }
+    // 根据最大内存地址调整可用的最大物理地址
     if (maxpa > KMEMSIZE) {
         maxpa = KMEMSIZE;
     }
 
+    // 全局指针变量end记录的是bootloader加载ucore 的结束地址
+    // 其上的高位内存空间并没有被使用,因此以end为起点，存放用于管理物理内存页面的数据结构
     extern char end[];
 
     npage = maxpa / PGSIZE;
+    // pages指向内核空间上的最近的一个新的物理页的开始（虚地址）
+    // 这个页中存放着所有可以用来分配的物理内存页数组
     pages = (struct Page *)ROUNDUP((void *)end, PGSIZE);
 
+    // 将所有的页置为保留状态，不可使用
     for (i = 0; i < npage; i ++) {
         SetPageReserved(pages + i);
     }
 
+    // 从地址0到地址pages+ sizeof(struct Page) * npage)结束的物理内存空间设定为已占用物理内存空间
+    // 地址pages+ sizeof(struct Page) * npage)以上的空间为空闲物理内存空间
+    // freemem 指向了可用的空闲物理内存页起始的物理地址
     uintptr_t freemem = PADDR((uintptr_t)pages + sizeof(struct Page) * npage);
 
+    // 对所有探测出来的物理内存块，建立映射，加入到内存管理器中
     for (i = 0; i < memmap->nr_map; i ++) {
         uint64_t begin = memmap->map[i].addr, end = begin + memmap->map[i].size;
         if (memmap->map[i].type == E820_ARM) {
@@ -233,6 +248,8 @@ page_init(void) {
                 begin = ROUNDUP(begin, PGSIZE);
                 end = ROUNDDOWN(end, PGSIZE);
                 if (begin < end) {
+                    // 通过page的虚拟地址转换到实际的物理内存地址
+                    // 然后对这段物理内存地址进行内存映射，然后加入到内存管理器中
                     init_memmap(pa2page(begin), (end - begin) / PGSIZE);
                 }
             }
