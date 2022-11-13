@@ -388,23 +388,33 @@ get_pte(pde_t *pgdir, uintptr_t la, bool create) {
      *   PTE_U           0x004                   // page table/directory entry flags bit : User can access
      */
 #if 1
-    pde_t *pdep = pgdir + PDX(la);   // (1) find page directory entry (pdep align 4)
-    if (((*pdep)&(PTE_P))==0) {              // (2) check if entry is not present (brankets)
-        if(create){                      // (3) check if creating is needed, then alloc page for page table
-            struct Page* newPage = alloc_page();// CAUTION: this page is used for page table, not for common data page
-            if(!newPage){   //physical memory allocation failed
+    // (1) find page directory entry (pdep align 4)
+    pde_t *pdep = pgdir + PDX(la);
+    // (2) check if entry is not present (brankets)
+    if (((*pdep)&(PTE_P))==0) {
+        // (3) check if creating is needed, then alloc page for page table
+        if(create){
+            // CAUTION: this page is used for page table, not for common data page
+            struct Page* newPage = alloc_page();
+            // physical memory allocation failed
+            if(!newPage){
                 panic("alloc_page failed.\n");
                 return NULL;
             }
-            set_page_ref(newPage,1);         // (4) set page reference
+            // (4) set page reference
+            set_page_ref(newPage,1);
             uintptr_t pa = page2pa(newPage); 
-            uintptr_t la = KADDR(pa);        // (5) get linear address of page
-            memset(la, 0, 4*1024);           // (6) clear page content using memset
-            *pdep = pa | PTE_USER;           // (7) set page directory entry's permission (PTE_U | PTE_W | PTE_P)
+            // (5) get linear address of page
+            uintptr_t la = KADDR(pa);
+            // (6) clear page content using memset
+            memset(la, 0, 4*1024);
+            // (7) set page directory entry's permission (PTE_U | PTE_W | PTE_P)
+            *pdep = pa | PTE_USER;
         }
         else return NULL;
     }
-    return KADDR(PTE_ADDR(*pdep)) + 4 * PTX(la);// (8) return page table entry, PTE_ADDR() removes flags and generates the physical address (kaddr align 1)
+    // (8) return page table entry, PTE_ADDR() removes flags and generates the physical address (kaddr align 1)
+    return KADDR(PTE_ADDR(*pdep)) + 4 * PTX(la);
 #endif
 }
 
@@ -443,14 +453,19 @@ page_remove_pte(pde_t *pgdir, uintptr_t la, pte_t *ptep) {
      *   PTE_P           0x001                   // page table/directory entry flags bit : Present
      */
 #if 1
-    if (ptep != NULL && *ptep & PTE_P) {                    //(1) check if this page table entry is present
-        struct Page *page = pte2page(*ptep);                //(2) find corresponding page to pte
-        page_ref_dec(page);                                 //(3) decrease page reference
-        if(page->ref == 0){                                 //(4) and free this page when page reference reachs 0
+    //(1) check if this page table entry is present
+    if (ptep != NULL && *ptep & PTE_P) {
+        //(2) find corresponding page to pte
+        struct Page *page = pte2page(*ptep);
+        //(3) decrease page reference
+        page_ref_dec(page);
+        //(4) and free this page when page reference reachs 0
+        if(page->ref == 0){
             free_page(page);
         }
         *ptep = 0;
-        tlb_invalidate(pgdir, la);         //(6) flush tlb
+        //(6) flush tlb
+        tlb_invalidate(pgdir, la);
     }
 #endif
 }

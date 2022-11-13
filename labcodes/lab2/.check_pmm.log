@@ -9,10 +9,24 @@ Booting from Hard Disk..(THU.CST) os is loading ...
 
 Special kernel symbols:
   entry  0xc0100036 (phys)
-  etext  0xc0105f2c (phys)
-  edata  0xc011c000 (phys)
-  end    0xc011cf28 (phys)
-Kernel executable memory footprint: 116KB
+  etext  0xc0106f54 (phys)
+  edata  0xc011f000 (phys)
+  end    0xc011ff38 (phys)
+Kernel executable memory footprint: 128KB
+ebp:0xc011bf38 eip:0xc0100ae8 args:0x00010094 0x00010094 0xc011bf68 0xc01000d1 
+    kern/debug/kdebug.c:308: print_stackframe+25
+ebp:0xc011bf48 eip:0xc0100de8 args:0x00000000 0x00000000 0x00000000 0xc011bfb8 
+    kern/debug/kmonitor.c:129: mon_backtrace+14
+ebp:0xc011bf68 eip:0xc01000d1 args:0x00000000 0xc011bf90 0xffff0000 0xc011bf94 
+    kern/init/init.c:49: grade_backtrace2+37
+ebp:0xc011bf88 eip:0xc01000ff args:0x00000000 0xffff0000 0xc011bfb4 0x0000002a 
+    kern/init/init.c:54: grade_backtrace1+42
+ebp:0xc011bfa8 eip:0xc0100122 args:0x00000000 0xc0100036 0xffff0000 0x0000001d 
+    kern/init/init.c:59: grade_backtrace0+27
+ebp:0xc011bfc8 eip:0xc010014c args:0xc0106f7c 0xc0106f60 0x00000f38 0x00000000 
+    kern/init/init.c:64: grade_backtrace+38
+ebp:0xc011bff8 eip:0xc010008b args:0xc010714c 0xc0107154 0xc0100d64 0xc0107173 
+    kern/init/init.c:29: kern_init+84
 memory management: default_pmm_manager
 e820map:
   memory: 0009fc00, [00000000, 0009fbff], type = 1.
@@ -32,3 +46,16 @@ PDE(001) fac00000-fb000000 00400000 -rw
   |-- PTE(00001) fafeb000-fafec000 00001000 -rw
 --------------------- END ---------------------
 ++ setup timer interrupts
+0: @ring 0
+0:  cs = 8
+0:  ds = 10
+0:  es = 10
+0:  ss = 10
++++ switch to  user  mode +++
+100 ticks
+End of Test.
+kernel panic at kern/trap/trap.c:18:
+    EOT: kernel seems ok.
+Welcome to the kernel debug monitor!!
+Type 'help' for a list of commands.
+K> 
