@@ -147,7 +147,7 @@ default_free_pages(struct Page *base, size_t n) {
     base->property=n;
     nr_free += n;
     list_add_before(le, &(base->page_link));
-    if(le==&free_list){//如果没啥别的事，赶紧让他滚蛋
+    if((le==&free_list) && list_next(&free_list)==&(base->page_link)){//如果没啥别的事，赶紧让他滚蛋
         return;
     }
     // 先判断是否需要和后面的进行合并
