@@ -10,7 +10,6 @@
 #include <error.h>
 #include <swap.h>
 #include <vmm.h>
-#include <kmalloc.h>
 
 /* *
  * Task State Segment:
@@ -328,8 +327,6 @@ pmm_init(void) {
     check_boot_pgdir();
 
     print_pgdir();
-    
-    kmalloc_init();
 
 }
 
@@ -363,17 +360,24 @@ get_pte(pde_t *pgdir, uintptr_t la, bool create) {
      *   PTE_W           0x002                   // page table/directory entry flags bit : Writeable
      *   PTE_U           0x004                   // page table/directory entry flags bit : User can access
      */
-#if 0
-    pde_t *pdep = NULL;   // (1) find page directory entry
-    if (0) {              // (2) check if entry is not present
-                          // (3) check if creating is needed, then alloc page for page table
-                          // CAUTION: this page is used for page table, not for common data page
-                          // (4) set page reference
-        uintptr_t pa = 0; // (5) get linear address of page
-                          // (6) clear page content using memset
-                          // (7) set page directory entry's permission
+#if 1
+    pde_t *pdep = pgdir + PDX(la);   // (1) find page directory entry (pdep align 4)
+    if (((*pdep)&(PTE_P))==0) {              // (2) check if entry is not present (brankets)
+        if(create){                      // (3) check if creating is needed, then alloc page for page table
+            struct Page* newPage = alloc_page();// CAUTION: this page is used for page table, not for common data page
+            if(!newPage){   //physical memory allocation failed
+                panic("alloc_page failed.\n");
+                return NULL;
+            }
+            set_page_ref(newPage,1);         // (4) set page reference
+            uintptr_t pa = page2pa(newPage); 
+            uintptr_t la = KADDR(pa);        // (5) get linear address of page
+            memset(la, 0, 4*1024);           // (6) clear page content using memset
+            *pdep = pa | PTE_USER;           // (7) set page directory entry's permission (PTE_U | PTE_W | PTE_P)
+        }
+        else return NULL;
     }
-    return NULL;          // (8) return page table entry
+    return KADDR(PTE_ADDR(*pdep)) + 4 * PTX(la);// (8) return page table entry, PTE_ADDR() removes flags and generates the physical address (kaddr align 1)
 #endif
 }
 
@@ -411,13 +415,15 @@ page_remove_pte(pde_t *pgdir, uintptr_t la, pte_t *ptep) {
      * DEFINEs:
      *   PTE_P           0x001                   // page table/directory entry flags bit : Present
      */
-#if 0
-    if (0) {                      //(1) check if this page table entry is present
-        struct Page *page = NULL; //(2) find corresponding page to pte
-                                  //(3) decrease page reference
-                                  //(4) and free this page when page reference reachs 0
-                                  //(5) clear second page table entry
-                                  //(6) flush tlb
+#if 1
+    if (ptep != NULL && *ptep & PTE_P) {                    //(1) check if this page table entry is present
+        struct Page *page = pte2page(*ptep);                //(2) find corresponding page to pte
+        page_ref_dec(page);                                 //(3) decrease page reference
+        if(page->ref == 0){                                 //(4) and free this page when page reference reachs 0
+            free_page(page);
+        }
+        *ptep = 0;
+        tlb_invalidate(pgdir, la);         //(6) flush tlb
     }
 #endif
 }
@@ -641,4 +647,26 @@ print_pgdir(void) {
         }
     }
     cprintf("--------------------- END ---------------------\n");
+}
+
+void *
+kmalloc(size_t n) {
+    void * ptr=NULL;
+    struct Page *base=NULL;
+    assert(n > 0 && n < 1024*0124);
+    int num_pages=(n+PGSIZE-1)/PGSIZE;
+    base = alloc_pages(num_pages);
+    assert(base != NULL);
+    ptr=page2kva(base);
+    return ptr;
+}
+
+void 
+kfree(void *ptr, size_t n) {
+    assert(n > 0 && n < 1024*0124);
+    assert(ptr != NULL);
+    struct Page *base=NULL;
+    int num_pages=(n+PGSIZE-1)/PGSIZE;
+    base = kva2page(ptr);
+    free_pages(base, num_pages);
 }
