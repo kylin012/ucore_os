@@ -420,6 +420,7 @@ do_pgfault(struct mm_struct *mm, uint32_t error_code, uintptr_t addr) {
             // 交换成功，则建立物理地址<--->虚拟地址映射，并将页设置为可交换的
             page_insert(mm->pgdir,page,addr,perm);
             swap_map_swappable(mm,addr,page,1);
+            page->pra_vaddr = addr;
         }
         // 没开启交换功能
         else{
