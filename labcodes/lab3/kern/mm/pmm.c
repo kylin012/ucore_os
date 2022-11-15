@@ -437,21 +437,26 @@ page_remove(pde_t *pgdir, uintptr_t la) {
     }
 }
 
-//page_insert - build the map of phy addr of an Page with the linear addr la
+// page_insert - build the map of phy addr of an Page with the linear addr la
 // paramemters:
 //  pgdir: the kernel virtual base address of PDT
 //  page:  the Page which need to map
 //  la:    the linear address need to map
 //  perm:  the permission of this Page which is setted in related pte
 // return value: always 0
-//note: PT is changed, so the TLB need to be invalidate 
+// note: PT is changed, so the TLB need to be invalidate
+// 建立la与指定物理页之间的映射关系
 int
 page_insert(pde_t *pgdir, struct Page *page, uintptr_t la, uint32_t perm) {
+    // 根据la找到对应的二级页表项
     pte_t *ptep = get_pte(pgdir, la, 1);
     if (ptep == NULL) {
         return -E_NO_MEM;
     }
     page_ref_inc(page);
+    // 如果之前这个二级页表项已经存在了
+    // 说明这个二级页表项之前已经建立了映射关系
+    // 需要判断是否和当前的映射一致，否则需要清空重新建立映射
     if (*ptep & PTE_P) {
         struct Page *p = pte2page(*ptep);
         if (p == page) {
@@ -461,7 +466,9 @@ page_insert(pde_t *pgdir, struct Page *page, uintptr_t la, uint32_t perm) {
             page_remove_pte(pgdir, la, ptep);
         }
     }
+    // 重新建立映射关系
     *ptep = page2pa(page) | PTE_P | perm;
+    // 要将TLB对应的项置为无效
     tlb_invalidate(pgdir, la);
     return 0;
 }
@@ -478,16 +485,21 @@ tlb_invalidate(pde_t *pgdir, uintptr_t la) {
 // pgdir_alloc_page - call alloc_page & page_insert functions to 
 //                  - allocate a page size memory & setup an addr map
 //                  - pa<->la with linear address la and the PDT pgdir
+// 在pdgir指向的页表，给la对应的页分配一个物理页进行虚实地址映射
 struct Page *
 pgdir_alloc_page(pde_t *pgdir, uintptr_t la, uint32_t perm) {
     struct Page *page = alloc_page();
     if (page != NULL) {
+        // 建立la对应二级页表项(位于pgdir页表中)与page物理页的映射关系
         if (page_insert(pgdir, page, la, perm) != 0) {
             free_page(page);
             return NULL;
         }
+        // 如果启用了swap交换分区
         if (swap_init_ok){
+            // 将新映射的这一个page物理页设置为可交换的，并纳入全局swap交换管理器中管理
             swap_map_swappable(check_mm_struct, la, page, 0);
+            // 设置这一物理页关联的虚拟内存
             page->pra_vaddr=la;
             assert(page_ref(page) == 1);
             //cprintf("get No. %d  page: pra_vaddr %x, pra_link.prev %x, pra_link_next %x in pgdir_alloc_page\n", (page-pages), page->pra_vaddr,page->pra_page_link.prev, page->pra_page_link.next);

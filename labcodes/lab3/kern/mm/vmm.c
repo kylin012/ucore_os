@@ -305,6 +305,7 @@ int
 do_pgfault(struct mm_struct *mm, uint32_t error_code, uintptr_t addr) {
     int ret = -E_INVAL;
     //try to find a vma which include addr
+    // 从mm中找到引发缺页的虚拟地址对应的vma
     struct vma_struct *vma = find_vma(mm, addr);
     //缺页异常发生数自增1
     pgfault_num++;
@@ -317,18 +318,24 @@ do_pgfault(struct mm_struct *mm, uint32_t error_code, uintptr_t addr) {
     //check the error_code
     // 检查vma的权限是否与error code的权限对应
     switch (error_code & 3) {
+    // 两位都是1，说明物理页存在发生写异常，缺页异常
     default:
             /* error code flag : default is 3 ( W/R=1, P=1): write, present */
+    // 物理页不存在发生写异常
     case 2: /* error code flag : (W/R=1, P=0): write, not present */
+        // 判断虚拟地址的权限是否是可写的
         if (!(vma->vm_flags & VM_WRITE)) {
             cprintf("do_pgfault failed: error code flag = write AND not present, but the addr's vma cannot write\n");
             goto failed;
         }
         break;
+    // 物理页存在读异常 可能发生的是权限导致的异常
     case 1: /* error code flag : (W/R=0, P=1): read, present */
         cprintf("do_pgfault failed: error code flag = read AND present\n");
         goto failed;
+    // 物理页不存在并且发生读异常
     case 0: /* error code flag : (W/R=0, P=0): read, not present */
+        // 如果虚拟地址的权限不是可读或者可执行的
         if (!(vma->vm_flags & (VM_READ | VM_EXEC))) {
             cprintf("do_pgfault failed: error code flag = read AND not present, but the addr's vma cannot read or exec\n");
             goto failed;
@@ -340,15 +347,18 @@ do_pgfault(struct mm_struct *mm, uint32_t error_code, uintptr_t addr) {
      * THEN
      *    continue process
      */
-    uint32_t perm = PTE_U;  //在PTE中保存的权限，表示用户态
+    // 在PTE中保存的权限，表示用户态
+    uint32_t perm = PTE_U;
     if (vma->vm_flags & VM_WRITE) {
         perm |= PTE_W;
     }
-    addr = ROUNDDOWN(addr, PGSIZE);   //地址按页对齐
+    // 地址按页向下对齐
+    addr = ROUNDDOWN(addr, PGSIZE);
 
     ret = -E_NO_MEM;
 
-    pte_t *ptep=NULL;   // 虚拟地址对应的PTE
+    // 虚拟地址对应的PTE
+    pte_t *ptep=NULL;
     /*LAB3 EXERCISE 1: YOUR CODE
     * Maybe you want help comment, BELOW comments can help you finish the code
     *
@@ -398,16 +408,17 @@ do_pgfault(struct mm_struct *mm, uint32_t error_code, uintptr_t addr) {
         }
    }
 #endif
-    ptep = get_pte(mm->pgdir,addr,1); //获得虚拟地址对应的PTE，如果包含该PTE的PT不存在，建立一个页存储PTE
+    // 获得虚拟地址对应的PTE，如果包含该PTE的PT不存在，建立一个页存储PTE
+    ptep = get_pte(mm->pgdir,addr,1);
     // *ptep为0说明需要建立物理页
     if (*ptep == 0){
-        //分配物理页失败
+        // 分配物理页失败
         if (pgdir_alloc_page(mm->pgdir, addr, perm) == NULL) {  
             cprintf("alloc page in do_pgfault failed\n");
             goto failed;
         }
     }
-    // 不为0，可以认为页在磁盘中，需要交换到内存中
+    // 不为0，可以认为页在磁盘swap分区中，需要交换到内存中
     else {
         // 如果开启了交换功能，则在内存中新建物理页，将页由磁盘换到内存中
         if(swap_init_ok) {

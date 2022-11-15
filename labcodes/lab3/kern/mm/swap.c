@@ -1,6 +1,7 @@
 #include <swap.h>
 #include <swapfs.h>
 #include <swap_fifo.h>
+#include <swap_clock.h>
 #include <stdio.h>
 #include <string.h>
 #include <memlayout.h>
@@ -39,6 +40,7 @@ swap_init(void)
      
 
      sm = &swap_manager_fifo;
+     // sm = &swap_manager_clock;
      int r = sm->init();
      
      if (r == 0)
@@ -87,28 +89,33 @@ swap_out(struct mm_struct *mm, int n, int in_tick)
           //struct Page **ptr_page=NULL;
           struct Page *page;
           // cprintf("i %d, SWAP: call swap_out_victim\n",i);
+          // 找到被换出的物理页，让page指向这个物理页
           int r = sm->swap_out_victim(mm, &page, in_tick);
           if (r != 0) {
-                    cprintf("i %d, swap_out: call swap_out_victim failed\n",i);
-                  break;
+               cprintf("i %d, swap_out: call swap_out_victim failed\n",i);
+               break;
           }          
           //assert(!PageReserved(page));
 
           //cprintf("SWAP: choose victim page 0x%08x\n", page);
-          
+          // 找到这个page对应的虚拟地址并得到对应的pte
           v=page->pra_vaddr; 
           pte_t *ptep = get_pte(mm->pgdir, v, 0);
           assert((*ptep & PTE_P) != 0);
 
+          // page->pra_vaddr 是虚拟地址 除以PGSIZE即右移12位得到高20位 是物理页的索引
+          // +1是因为交换分区的前8个扇区不存储
+          // 再左移8位构成一个swap_entry_t
           if (swapfs_write( (page->pra_vaddr/PGSIZE+1)<<8, page) != 0) {
-                    cprintf("SWAP: failed to save\n");
-                    sm->map_swappable(mm, v, page, 0);
-                    continue;
+               cprintf("SWAP: failed to save\n");
+               sm->map_swappable(mm, v, page, 0);
+               continue;
           }
           else {
-                    cprintf("swap_out: i %d, store page in vaddr 0x%x to disk swap entry %d\n", i, v, page->pra_vaddr/PGSIZE+1);
-                    *ptep = (page->pra_vaddr/PGSIZE+1)<<8;
-                    free_page(page);
+               cprintf("swap_out: i %d, store page in vaddr 0x%x to disk swap entry %d\n", i, v, page->pra_vaddr/PGSIZE+1);
+               // 再修改pte为swap_entry_t，保存对应磁盘扇区号，然后释放物理页
+               *ptep = (page->pra_vaddr/PGSIZE+1)<<8;
+               free_page(page);
           }
           
           tlb_invalidate(mm->pgdir, v);
@@ -116,21 +123,27 @@ swap_out(struct mm_struct *mm, int n, int in_tick)
      return i;
 }
 
+// 从磁盘swap分区换入到主存
 int
 swap_in(struct mm_struct *mm, uintptr_t addr, struct Page **ptr_result)
 {
+     // 先分配一个物理页
      struct Page *result = alloc_page();
      assert(result!=NULL);
 
+     // 得到地址对应的页表项
+     // 此时页表项中存储的是swap_entry_t
      pte_t *ptep = get_pte(mm->pgdir, addr, 0);
      // cprintf("SWAP: load ptep %x swap entry %d to vaddr 0x%08x, page %x, No %d\n", ptep, (*ptep)>>8, addr, result, (result-pages));
     
      int r;
+     // 将磁盘中的对应数据写入result中
      if ((r = swapfs_read((*ptep), result)) != 0)
      {
         assert(r!=0);
      }
      cprintf("swap_in: load disk swap entry %d with swap_page in vadr 0x%x\n", (*ptep)>>8, addr);
+     // 修改ptr_result使其指向对应的Page
      *ptr_result=result;
      return 0;
 }
