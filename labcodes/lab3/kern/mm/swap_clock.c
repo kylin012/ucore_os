@@ -49,10 +49,11 @@ _clock_swap_out_victim(struct mm_struct *mm, struct Page ** ptr_page, int in_tic
     struct Page * page = NULL;
     // 然后从这个entry开始遍历
     // 第一遍ckeck A==0 && D==0 这一遍不修改flag
-    list_entry_t* index = current;
+    list_entry_t* index = list_next(current);
     while(index != current) {
         // 如果是pra_list_head直接continue
         if(index == &pra_list_head) {
+            index = list_next(index);
             continue;
         }
         // 先获取当前链表项对应的page
@@ -74,10 +75,11 @@ _clock_swap_out_victim(struct mm_struct *mm, struct Page ** ptr_page, int in_tic
         index = list_next(index);
     }
     // 第二遍check A==0 这一遍修改清空flag的A位
-    index = current;
+    index = list_next(current);
     while(index != current) {
         // 如果是pra_list_head直接continue
         if(index == &pra_list_head) {
+            index = list_next(index);
             continue;
         }
         // 先获取当前链表项对应的page
@@ -100,10 +102,11 @@ _clock_swap_out_victim(struct mm_struct *mm, struct Page ** ptr_page, int in_tic
         index = list_next(index);
     }
     // 第三遍check D==0 这一遍时A位已经全部置0
-    index = current;
+    index = list_next(current);
     while(index != current) {
         // 如果是pra_list_head直接continue
         if(index == &pra_list_head) {
+            index = list_next(index);
             continue;
         }
         // 先获取当前链表项对应的page
