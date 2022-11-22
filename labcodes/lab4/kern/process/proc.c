@@ -102,6 +102,30 @@ alloc_proc(void) {
      *       uint32_t flags;                             // Process flag
      *       char name[PROC_NAME_LEN + 1];               // Process name
      */
+    // 进程状态，标记为未初始化
+    proc->state = PROC_UNINIT;
+    // 进程id，标记为-1
+    proc->pid = -1;
+    // 运行的次数，标记为0
+    proc->runs = 0;
+    // 内核栈的最低地址处
+    proc->kstack = NULL;
+    // 是否需要重新调度，让出CPU资源
+    proc->need_resched = NULL;
+    // 父进程
+    proc->parent = NULL;
+    // 关联的内存管理器，包括映射、页表指针等。lab4不涉及内存，直接置空
+    proc->mm = NULL;
+    // 保存的上下文寄存器信息
+    memset(&(proc->context), 0, sizeof(struct context));
+    // 切换进程时的中断帧。当内核需要跳回用户空间时，需要调整中断帧以恢复让进程继续执行的各寄存器值
+    proc->tf = NULL;
+    // boot_cr3指向内核虚拟空间的页目录表首地址。cr3表示页目录表的物理首地址。内核中物理地址=虚拟地址
+    proc->cr3 = boot_cr3;
+    // 状态标志位
+    proc->flags = 0;
+    // 进程名称
+    memset(&(proc->name), 0, PROC_NAME_LEN + 1);
     }
     return proc;
 }
