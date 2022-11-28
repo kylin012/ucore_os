@@ -11,6 +11,7 @@
 #include <vmm.h>
 #include <ide.h>
 #include <swap.h>
+#include <proc.h>
 #include <kmonitor.h>
 
 int kern_init(void) __attribute__((noreturn));
@@ -37,6 +38,7 @@ kern_init(void) {
     idt_init();                 // init interrupt descriptor table
 
     vmm_init();                 // init virtual memory management
+    proc_init();                // Lab4: init process table (完成idleproc内核线程和initproc内核线程的创建或复制工作)
 
     ide_init();                 // init ide devices
     swap_init();                // init swap
@@ -49,7 +51,7 @@ kern_init(void) {
     //lab1_switch_test();
 
     /* do nothing */
-    while (1);
+    cpu_idle();                 // Lab4: run idle process
 }
 
 void __attribute__((noinline))

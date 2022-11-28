@@ -4,7 +4,7 @@ switch_to:                      # switch_to(from, to)
 
     # save from's registers
     movl 4(%esp), %eax          # eax points to from
-    popl 0(%eax)                # save eip !popl
+    popl 0(%eax)                # save eip to context.eip !popl
     movl %esp, 4(%eax)          # save esp::context of from
     movl %ebx, 8(%eax)          # save ebx::context of from
     movl %ecx, 12(%eax)         # save ecx::context of from
@@ -26,5 +26,5 @@ switch_to:                      # switch_to(from, to)
 
     pushl 0(%eax)               # push eip
 
-    ret
+    ret                         # pop eip
 
