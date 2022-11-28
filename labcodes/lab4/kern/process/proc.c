@@ -109,9 +109,9 @@ alloc_proc(void) {
     // 运行的次数，标记为0
     proc->runs = 0;
     // 内核栈的最低地址处
-    proc->kstack = NULL;
+    proc->kstack = 0;
     // 是否需要重新调度，让出CPU资源
-    proc->need_resched = NULL;
+    proc->need_resched = 0;
     // 父进程
     proc->parent = NULL;
     // 关联的内存管理器，包括映射、页表指针等。lab4不涉及内存，直接置空
