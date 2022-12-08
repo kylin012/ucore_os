@@ -1,5 +1,6 @@
 .text
 .globl kernel_thread_entry
+# 为内核线程的主体函数fn做一个准备开始和结束运行的“外壳”
 kernel_thread_entry:        # void kernel_thread(void)
 
     pushl %edx              # push arg

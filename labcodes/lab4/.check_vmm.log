@@ -1,7 +1,7 @@
-c[?7l[2J[0mSeaBIOS (version 1.15.0-1)
+c[?7l[2J[0mSeaBIOS (version 1.13.0-1ubuntu1.1)
 
 
-iPXE (https://ipxe.org) 00:03.0 CA00 PCI2.10 PnP PMM+07F8B4A0+07ECB4A0 CA00
+iPXE (http://ipxe.org) 00:03.0 CA00 PCI2.10 PnP PMM+07F8CA10+07ECCA10 CA00
 Press Ctrl-B to configure iPXE (PCI 00:03.0)...                                                                               
 
 
@@ -9,24 +9,24 @@ Booting from Hard Disk..(THU.CST) os is loading ...
 
 Special kernel symbols:
   entry  0xc0100036 (phys)
-  etext  0xc0109fea (phys)
+  etext  0xc010a165 (phys)
   edata  0xc012b000 (phys)
-  end    0xc012e154 (phys)
+  end    0xc012e14c (phys)
 Kernel executable memory footprint: 185KB
-ebp:0xc0127f38 eip:0xc01009fd args:0x000100b4 0x000100b4 0xc0127f68 0xc01000db 
-    kern/debug/kdebug.c:308: print_stackframe+21
-ebp:0xc0127f48 eip:0xc0100cf2 args:0x00000000 0x00000000 0x00000000 0xc0127fb8 
-    kern/debug/kmonitor.c:129: mon_backtrace+10
-ebp:0xc0127f68 eip:0xc01000db args:0x00000000 0xc0127f90 0xffff0000 0xc0127f94 
-    kern/init/init.c:59: grade_backtrace2+33
-ebp:0xc0127f88 eip:0xc0100109 args:0x00000000 0xffff0000 0xc0127fb4 0x0000002a 
-    kern/init/init.c:64: grade_backtrace1+40
-ebp:0xc0127fa8 eip:0xc0100129 args:0x00000000 0xc0100036 0xffff0000 0x0000001d 
-    kern/init/init.c:69: grade_backtrace0+23
-ebp:0xc0127fc8 eip:0xc0100151 args:0xc010a01c 0xc010a000 0x00003154 0x00000000 
-    kern/init/init.c:74: grade_backtrace+34
-ebp:0xc0127ff8 eip:0xc0100087 args:0xc010a1b0 0xc010a1b8 0xc0100c76 0xc010a1d7 
-    kern/init/init.c:33: kern_init+80
+ebp:0xc0127f38 eip:0xc0100b0b args:0x00010094 0x00010094 0xc0127f68 0xc01000e3 
+    kern/debug/kdebug.c:308: print_stackframe+25
+ebp:0xc0127f48 eip:0xc0100e0b args:0x00000000 0x00000000 0x00000000 0xc0127fb8 
+    kern/debug/kmonitor.c:129: mon_backtrace+14
+ebp:0xc0127f68 eip:0xc01000e3 args:0x00000000 0xc0127f90 0xffff0000 0xc0127f94 
+    kern/init/init.c:59: grade_backtrace2+37
+ebp:0xc0127f88 eip:0xc0100111 args:0x00000000 0xffff0000 0xc0127fb4 0x0000002a 
+    kern/init/init.c:64: grade_backtrace1+42
+ebp:0xc0127fa8 eip:0xc0100134 args:0x00000000 0xc0100036 0xffff0000 0x0000001d 
+    kern/init/init.c:69: grade_backtrace0+27
+ebp:0xc0127fc8 eip:0xc010015e args:0xc010a19c 0xc010a180 0x0000314c 0x00000000 
+    kern/init/init.c:74: grade_backtrace+38
+ebp:0xc0127ff8 eip:0xc010008b args:0xc010a37c 0xc010a384 0xc0100d87 0xc010a3a3 
+    kern/init/init.c:33: kern_init+84
 memory management: default_pmm_manager
 e820map:
   memory: 0009fc00, [00000000, 0009fbff], type = 1.
@@ -101,16 +101,16 @@ check_swap() succeeded!
 this initproc, pid = 1, name = "init"
 To U: "Hello world!!".
 To U: "en.., Bye, Bye. :)"
-kernel panic at kern/process/proc.c:385:
+kernel panic at kern/process/proc.c:396:
     process exit!!.
 
 stack trackback:
-ebp:0xc0310f98 eip:0xc01009fd args:0xc010a2e4 0xc0310fdc 0x00000181 0xc0310fcc 
-    kern/debug/kdebug.c:308: print_stackframe+21
-ebp:0xc0310fc8 eip:0xc0100d63 args:0xc010bfb9 0x00000181 0xc010bfcd 0xc012e144 
-    kern/debug/panic.c:27: __panic+103
-ebp:0xc0310fe8 eip:0xc0109000 args:0x00000000 0xc010c04c 0x00000000 0x00000010 
-    kern/process/proc.c:385: do_exit+33
+ebp:0xc0310f98 eip:0xc0100b0b args:0xc010a248 0xc0310fdc 0x0000018c 0xc0310fcc 
+    kern/debug/kdebug.c:308: print_stackframe+25
+ebp:0xc0310fc8 eip:0xc01004b4 args:0xc010c139 0x0000018c 0xc010c14d 0xc012e044 
+    kern/debug/panic.c:27: __panic+107
+ebp:0xc0310fe8 eip:0xc0109164 args:0x00000000 0xc010c1cc 0x00000000 0x00000010 
+    kern/process/proc.c:396: do_exit+37
 Welcome to the kernel debug monitor!!
 Type 'help' for a list of commands.
 K> 
