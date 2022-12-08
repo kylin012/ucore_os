@@ -1,9 +1,12 @@
 .text
 .globl switch_to
+# esp+8 ---> to->context
+# esp+4 ---> from->context
+# esp   ---> from 返回地址
 switch_to:                      # switch_to(from, to)
 
     # save from's registers
-    movl 4(%esp), %eax          # eax points to from
+    movl 4(%esp), %eax          # eax points to from->context
     popl 0(%eax)                # save eip to context.eip !popl
     movl %esp, 4(%eax)          # save esp::context of from
     movl %ebx, 8(%eax)          # save ebx::context of from

@@ -187,21 +187,22 @@ proc_run(struct proc_struct *proc) {
     if (proc != current) {
         bool intr_flag;
         struct proc_struct *prev = current, *next = proc;
-        local_intr_save(intr_flag);//関中斷
+        // 关中断
+        local_intr_save(intr_flag);
         {
             current = proc;
-            //TSS (task segment selector) 為GDT中一個特殊的段描述符，其段選擇子（帶偏移索引）存放在Task Register (TR) 中
-            //用於在切換特權級 (CPL) z至ring0時修改SS和ESP
-            //僅用到ss0和esp0兩個域，分別爲權限提升後的段選擇子和esp
-            //load_esp0將内核棧的棧頂 (next->kstack + KSTACKSIZE) 載入TSS的esp0域
-            //如果是在ring3发生了中断/异常/系统调用，则CPU会从特权态3-->特权态0，
-            //且CPU从被打断进程的内核栈顶开始压栈来保存被打断的用户态执行现场；
-            //如果是在ring0发生了中断/异常/系统调用，则CPU会从从当前内核栈指针esp0所指的位置开始压栈
-            //保存被中断/异常/系统调用打断的内核态执行现场（in switch_to()）
+            // TSS (task segment selector) 为GDT中一个特殊的段描述符，其段选择子（带偏移索引）存放在 Task Register (TR) 中
+            // 用于在切换特权级 (CPL) 至ring0时修改SS和ESP
+            // 仅用到ss0和esp0两个域，分別为权限及提升后的段选择子和esp
+            // load_esp0将内核栈的栈顶 (next->kstack + KSTACKSIZE) 加载入TSS的esp0域
+            // 如果是在ring3发生了中断/异常/系统调用，则CPU会从特权态3-->特权态0，
+            // 且CPU从被打断进程的内核栈顶开始压栈来保存被打断的用户态执行现场；
+            // 如果是在ring0发生了中断/异常/系统调用，则CPU会从从当前内核栈指针esp0所指的位置开始压栈
+            // 保存被中断/异常/系统调用打断的内核态执行现场（in switch_to()）
             load_esp0(next->kstack + KSTACKSIZE);
             lcr3(next->cr3);
-            //esp+8為next->context, esp+4為prev->context，esp (棧頂) 為prev下一條指令的eip (返回地址)
-            //核心在於換掉了返回地址
+            // esp+8为next->context, esp+4为prev->context，esp为prev下一条指令的eip (返回地址)
+            // 核心在於換掉了返回地址
             switch_to(&(prev->context), &(next->context));
         }
         local_intr_restore(intr_flag);
@@ -236,22 +237,26 @@ find_proc(int pid) {
     }
     return NULL;
 }
-//創建進程1：initproc，其綫程函數為init_main()
+// 创建进程1：initproc，其线程函数为init_main()
 // kernel_thread - create a kernel thread using "fn" function
 // NOTE: the contents of temp trapframe tf will be copied to 
 //       proc->tf in do_fork-->copy_thread function
 int
 kernel_thread(int (*fn)(void *), void *arg, uint32_t clone_flags) {
-    struct trapframe tf;//將由do_fork函數搬運到新創建的進程内核棧上
+    // 申请一个局部变量 tf 用来保存内核线程的临时中断帧
+    // 后续会将这个 tf 传递给 do_fork() 函数
+    // 在 do_fork() 函数中 会在新创建的进程的内核栈上给 tf 分配一段空间
+    struct trapframe tf;
     memset(&tf, 0, sizeof(struct trapframe));
+    // 调整数据段和代码段
     tf.tf_cs = KERNEL_CS;
-    tf.tf_ds = tf.tf_es = tf.tf_ss = KERNEL_DS;//ds, es, ss均爲數據段
-    tf.tf_regs.reg_ebx = (uint32_t)fn;//ebx存储线程函数指针，即init_main
-    tf.tf_regs.reg_edx = (uint32_t)arg;//edx存储线程函数参数，即"Hello word"
-    //kernel_thread_entry位於kern/process/entry.S
-    //完成fn函數的調用（參數arg壓棧、call、返回值eax壓棧）
-    //然後調用do_exit終止進程
-    //由於要手動寫入eip，必須給調用fn加一個匯編的殼，以獲得指令地址
+    tf.tf_ds = tf.tf_es = tf.tf_ss = KERNEL_DS;
+    // ebx存储线程函数指针，即init_main
+    tf.tf_regs.reg_ebx = (uint32_t)fn;
+    // edx存储线程函数参数，即"Hello word"
+    tf.tf_regs.reg_edx = (uint32_t)arg;
+    // kernel_thread_entry 位于 kern/process/entry.S
+    // 将 kernel_thread_entry 的地址手动赋值给 tf_eip
     tf.tf_eip = (uint32_t)kernel_thread_entry;
     return do_fork(clone_flags | CLONE_VM, 0, &tf);
 }
@@ -286,18 +291,22 @@ copy_mm(uint32_t clone_flags, struct proc_struct *proc) {
 //             - setup the kernel entry point and stack of process
 static void
 copy_thread(struct proc_struct *proc, uintptr_t esp, struct trapframe *tf) {
-    //在内核栈顶開闢中断帧大小的一块栈空间
+    // 在当前进程对应的内核栈顶开辟中断帧大小的一块栈空间
     proc->tf = (struct trapframe *)(proc->kstack + KSTACKSIZE) - 1;
     *(proc->tf) = *tf;//深拷貝tf
-    //此時中斷幀位於(proc->kstack+KSTACKSIZE) – sizeof (struct trapframe)~(proc->kstack + KSTACKSIZE)
-    //tf_regs用於中斷返回時恢復上下文
-    //设置子进程/线程执行完do_fork后的返回值
+    // 此时中断帧位于 (proc->kstack+KSTACKSIZE)–sizeof (struct trapframe) ~ (proc->kstack + KSTACKSIZE)
+    // tf_regs 用于中断返回的时候恢复上下文
+    // 设置子进程/线程执行完do_fork后的返回值
     proc->tf->tf_regs.reg_eax = 0;
-    proc->tf->tf_esp = esp;//esp0，全棧可用
-    proc->tf->tf_eflags |= FL_IF;//使能中断，表示此内核线程在执行过程中，能响应中断，打断当前的执行
+    // esp0，全栈可用
+    proc->tf->tf_esp = esp;
+    // 使能中断，表示此内核线程在执行过程中，能响应中断，打断当前的执行
+    proc->tf->tf_eflags |= FL_IF;
+    // context.eip 是上一次停止执行时的下一条指令的地址
+    // context.esp 是上一次停止执行时的堆栈地址
     proc->context.eip = (uintptr_t)forkret;
-    //由于initproc的中断帧占用了实际给initproc分配的栈空间的顶部
-    //所以initproc就只能把栈顶指针context.esp设置在initproc的中断帧的起始位置
+    // 由于initproc的中断帧占用了实际给initproc分配的栈空间的顶部
+    // 所以initproc就只能把栈顶指针context.esp设置在initproc的中断帧的起始位置
     proc->context.esp = (uintptr_t)(proc->tf);
 }
 
@@ -332,38 +341,40 @@ do_fork(uint32_t clone_flags, uintptr_t stack, struct trapframe *tf) {
      *   nr_process:   the number of process set
      */
 
-    //    1. call alloc_proc to allocate a proc_struct
+    // 1. call alloc_proc to allocate a proc_struct
     if ((proc = alloc_proc()) == NULL) {
         goto fork_out;
     }
-    //    2. call setup_kstack to allocate a kernel stack for child process
+    // 2. call setup_kstack to allocate a kernel stack for child process
     if(setup_kstack(proc)){
         goto bad_fork_cleanup_proc;
     }
-    //    3. call copy_mm to dup OR share mm according clone_flag
-    //if clone_flags & CLONE_VM, then "share" ; else "duplicate"
+    // 3. call copy_mm to dup OR share mm according clone_flag
+    // if clone_flags & CLONE_VM, then "share" ; else "duplicate"
     if(copy_mm(clone_flags, proc)){
         goto bad_fork_cleanup_kstack;
     }
-    //    4. call copy_thread to setup tf & context in proc_struct
-    //從當前ESP開始壓棧
+    // 4. call copy_thread to setup tf & context in proc_struct
+    // 从当前的 esp 开始压栈
     copy_thread(proc, stack, tf);
-    //    5. insert proc_struct into hash_list && proc_list
-    proc->parent = current;//設置雙親節點
+    // 5. insert proc_struct into hash_list && proc_list
+    // 设置父进程
+    proc->parent = current;
     bool intr_flag;
-    local_intr_save(intr_flag);//関中斷！
+    // 关中断
+    local_intr_save(intr_flag);
     {
-    //    6. call wakeup_proc to make the new child process RUNNABLE
-    //必須在hash前設置pid
+        // 6. call wakeup_proc to make the new child process RUNNABLE
+        // 必须在hash之前设置pid 因为在hash_proc()函数中会用到pid的值
         proc->pid = get_pid();
         hash_proc(proc);
         list_add(&proc_list, &(proc->list_link));
         nr_process ++;
     }
     local_intr_restore(intr_flag);
-    //    initproc->state = PROC_RUNNABLE;
+    // initproc->state = PROC_RUNNABLE;
     wakeup_proc(proc);
-    //    7. set ret vaule using child proc's pid
+    // 7. set ret vaule using child proc's pid
     ret = proc->pid;
 
 fork_out:
@@ -435,7 +446,8 @@ void
 cpu_idle(void) {
     while (1) {
         if (current->need_resched) {
-            schedule();//in sched.c，調用鏈proc_run(next)->switch_to()
+            // in sched.c，调用链 proc_run(next)->switch_to()
+            schedule();
         }
     }
 }
