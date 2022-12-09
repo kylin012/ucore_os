@@ -151,11 +151,18 @@ get_pid(void) {
     static_assert(MAX_PID > MAX_PROCESS);
     struct proc_struct *proc;
     list_entry_t *list = &proc_list, *le;
+    // 静态变量的生存期是整个程序运行期间
+    // last_pid就是上次分配的pid
+    // next_safe是大于last_pid并且值最小的已占用的pid，是为了减少探测次数
     static int next_safe = MAX_PID, last_pid = MAX_PID;
     if (++ last_pid >= MAX_PID) {
+        // 这里注意0号线程已经被idleproc占用，因此从1开始
+        // 并且如果last_pid重置了，那么next_safe也应该重置
         last_pid = 1;
         goto inside;
     }
+    // 如果last_pid（注意加过1了）仍小于next_safe，说明这个pid未分配，可以直接返回
+    // 如果不小于next_safe了，就需要重置next_safe
     if (last_pid >= next_safe) {
     inside:
         next_safe = MAX_PID;
@@ -163,6 +170,7 @@ get_pid(void) {
         le = list;
         while ((le = list_next(le)) != list) {
             proc = le2proc(le, list_link);
+            // 如果这个last_pid已经被占用了，那就再看看他的下一个满足不满足与MAX_PID和next_safe之间的大小关系，不满足则又需要重置了
             if (proc->pid == last_pid) {
                 if (++ last_pid >= next_safe) {
                     if (last_pid >= MAX_PID) {
@@ -172,6 +180,7 @@ get_pid(void) {
                     goto repeat;
                 }
             }
+            // 看看next_safe能不能更新成更小的
             else if (proc->pid > last_pid && next_safe > proc->pid) {
                 next_safe = proc->pid;
             }
@@ -404,7 +413,7 @@ init_main(void *arg) {
     cprintf("To U: \"en.., Bye, Bye. :)\"\n");
     return 0;
 }
-//創建綫程0：idleproc
+// 创建线程0：idleproc
 // proc_init - set up the first kernel thread idleproc "idle" by itself and 
 //           - create the second kernel thread init_main
 void
@@ -428,7 +437,7 @@ proc_init(void) {
     nr_process ++;
 
     current = idleproc;
-    //創建綫程1：initproc
+    // 创建线程1：initproc
     int pid = kernel_thread(init_main, "Hello world!!", 0);
     if (pid <= 0) {
         panic("create init_main failed.\n");
@@ -440,7 +449,7 @@ proc_init(void) {
     assert(idleproc != NULL && idleproc->pid == 0);
     assert(initproc != NULL && initproc->pid == 1);
 }
-//idleproc的擺爛函數：一旦當前進程yield就調度
+// idleproc的擺爛函數：一旦当前进程yield就调度
 // cpu_idle - at the end of kern_init, the first kernel thread idleproc will do below works
 void
 cpu_idle(void) {
